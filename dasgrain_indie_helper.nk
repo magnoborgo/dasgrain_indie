@@ -1,0 +1,465 @@
+set cut_paste_input [stack 0]
+version 12.2 v5
+push $cut_paste_input
+Group {
+ name DasGrain_I_NC_helper1
+ selected true
+ xpos -1433
+ ypos 1682
+ addUserKnob {20 Indie_NC l "Dasgrain Nuke Indie/Non-Commercial Helper"}
+ addUserKnob {22 RESET t "Start the process all over" T "this = nuke.thisNode()\nthis\[\"framelist_button\"].setEnabled(False)\nthis\[\"voronoisub\"].setEnabled(False)\nthis\[\"setupmultiframe_button\"].setEnabled(False)\nthis\[\"samplecount_button\"].setEnabled(False)\nthis\[\"sampleit_button\"].setEnabled(False)\nthis\[\"checkinput\"].setValue(\"\")\nthis\[\"framelist\"].setValue(\"\")\nthis\[\"setupmultiframe\"].setValue(\"\")\nthis\[\"samplelist_red\"].setValue(\"\")\nthis\[\"samplelist_blue\"].setValue(\"\")\nthis\[\"samplelist_green\"].setValue(\"\")\nthis\[\"sampleranges\"].setValue(\"\")\nthis\[\"sample_radius_red\"].setValue(\"\")\nthis\[\"sample_radius_blue\"].setValue(\"\")\nthis\[\"sample_radius_green\"].setValue(\"\")" +STARTLINE}
+ addUserKnob {22 checkinput_1 l "Step1 - check inputs" T "import nuke\nhelper = nuke.thisNode()\nh_i1 = helper.input(0) \nif h_i1 is None:\n    raise RuntimeError('Connect a DasGrain node to this node input')\nelse:\n    this = h_i1\n    if \"dasname\" not in this.knobs():\n        raise RuntimeError('Connected node is not a DasGrain node')\n\nhelper\[\"checkinput\"].setValue(\"\")\n\ni1 = this.input(1) \ni2 = this.input(2) \nif i1 is None:\n    raise RuntimeError('no plate connected')\n\nif i2 is None:\n    raise RuntimeError('no degrained plate connected')\n\ndef format_tuple(node):\n    return node.format().width(), node.format().height(), node.format().pixelAspect()\n\nif format_tuple(i1) != format_tuple(i2):\n    raise RuntimeError(\"Format missmatch: Make sure the formats of plate and degrained plate match.\")\nelse:\n    helper\[\"checkinput\"].setValue(\"DONE\")\n    helper\[\"framelist_button\"].setEnabled(True)\n    helper\[\"voronoisub\"].setEnabled(True)\n    h_i1\[\"name\"].setValue( h_i1\[\"name\"].value()+\"_i_nc\")\n" +STARTLINE}
+ addUserKnob {22 voronoisub l "Step1B - Voronoi Substitution" -STARTLINE +DISABLED T "helper = nuke.thisNode()\nthis = helper.input(0)\n\ntry:\n\tnuke.toNode(helper.knob('name').value()).begin()\n\t\[n.setSelected(False) for n in nuke.selectedNodes()]\n\tvoronoi_inc = nuke.toNode('VoronoiScatterINC')\n\tvoronoi_map = nuke.toNode('VoronoiMap')\n\tvoronoi_inc\['selected'].setValue(True)\n\tvoronoi_map\['selected'].setValue(True)\n\n\tnuke.nodeCopy(\"%clipboard%\")\n\tvoronoi_inc\['selected'].setValue(False)\n\tvoronoi_map\['selected'].setValue(False)\n\tnuke.toNode(helper.knob('name').value()).end()\n\n\tnuke.toNode(this.knob('name').value()).begin()\n\toriginal_voronoi = nuke.toNode(\"VoronoiScatter\")\n\n\t# original_voronoi\['selected'].setValue(True)\n\tnuke.nodePaste(\"%clipboard%\")\n\tnuke.delete(original_voronoi)\n\tvoronoi_inc = nuke.toNode('VoronoiScatterINC')\n\tsw2 = nuke.toNode('Switch2')\n\tmp7 = nuke.toNode('Multiply7')\n\tvoronoi_inc.setInput(0, sw2)\n\tvoronoi_inc\['xpos'].setValue(sw2\['xpos'].value())\n\tvoronoi_inc\['ypos'].setValue(sw2\['ypos'].value()+50)\n\tmp7.setInput(0, voronoi_inc)\n\tnuke.toNode(this.knob('name').value()).end()\nexcept Exception:\n    raise RuntimeError('You probably already changed the Voronoi scatter')\n"}
+ addUserKnob {22 framelist_button l "Step2 - framelist" +DISABLED T "helper = nuke.thisNode()\nthis = helper.input(0)\n\nframe_list = \[]\nnumber_of_frames = int(this\['number_of_frames'].value())\nadditional_frames = this\['additional_frames'].value()\n\nif number_of_frames < 1 and additional_frames is '':\n    raise RuntimeError('Either set the number of frames > 0\\nor define additional frames')\n\nfirst_frame = max(this.input(1).firstFrame(), this.input(2).firstFrame())\nlast_frame = min(this.input(1).lastFrame(), this.input(2).lastFrame())\n\nif number_of_frames > 0:\n    distance = (last_frame - first_frame) / (number_of_frames)\n    frame = first_frame + distance / 2\n\n    for x in range(number_of_frames):\n        int_frame = int(round(frame))\n        if int_frame not in frame_list:\n            frame_list.append(int_frame)\n\n        frame += distance\n\nfrange = nuke.FrameRanges(additional_frames.split(','))\n\nfor r in frange:\n    for f in r:\n        if f >= first_frame and f <= last_frame:\n            if f not in frame_list:\n                frame_list.append(f)\n\nframe_list.sort()\nhelper\[\"framelist\"].setValue(str(frame_list))\nhelper\[\"setupmultiframe_button\"].setEnabled(True)" +STARTLINE}
+ addUserKnob {22 setupmultiframe_button l "Step3 - multiframe setup" +DISABLED T "helper = nuke.thisNode()\nthis = helper.input(0)\nframe_list = list(helper\[\"framelist\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\nnuke.toNode(this.knob('name').value()).begin()\ntime_warp = nuke.toNode('TimeWarp1')\ntime_warp\['lookup'].clearAnimated()\ntime_warp\['lookup'].setAnimated()\nanim_list = \[]\nfor n, frame in enumerate(frame_list):\n    anim_list.append(nuke.AnimationKey(n, float(frame)))\nanim = time_warp\['lookup'].animation(0)\nanim.addKey(anim_list)\nframe_blend = nuke.toNode('FrameBlend1')\nframe_blend\['endframe'].setValue(len(frame_list)-1)\nnuke.toNode(this.knob('name').value()).end()\nhelper\[\"setupmultiframe\"].setValue(\"DONE\")\nhelper\[\"samplecount_button\"].setEnabled(True)" +STARTLINE}
+ addUserKnob {22 samplecount_button l "Step4 - Sample Ranges" +DISABLED T "helper = nuke.thisNode()\nthis = helper.input(0)\n\nframe_list = list(helper\[\"framelist\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\n\n# def _get_sample_range(channel, channel_list, frame_list):\n\"\"\" samples the minimum and maximum values of the given frame range and\nsets the sample range to those values\"\"\"\n\nchannel_list = \['red', 'green', 'blue']\nsampleranges = \[]\nsample_count = int(this\['sample_count'].value())\n\nif sample_count <= 0:\n    raise RuntimeError('Enter a sample count greater than 0')\n\nnuke.toNode(this.knob('name').value()).begin()\nfor channel in channel_list:\n    curve_tool = nuke.toNode('CurveTool_Range')\n    min_knob = curve_tool\['minlumapixvalue']\n    max_knob = curve_tool\['maxlumapixvalue']\n\n    min_knob.setAnimated()\n    max_knob.setAnimated()\n\n    curve_tool\['channels'].setValue(channel)\n\n    nuke.execute(curve_tool, nuke.FrameRanges(frame_list))\n\n    index = channel_list.index(channel)\n    min_list = \[key.y for key in min_knob.animation(index).keys()]\n    max_list = \[key.y for key in max_knob.animation(index).keys()]\n\n    min_value = min(min_list)\n    max_value = max(max_list)\n\n    min_knob.clearAnimated()\n    max_knob.clearAnimated()\n    curve_tool\['minlumapixdata'].clearAnimated()\n    curve_tool\['maxlumapixdata'].clearAnimated()\n\n    sample_radius = (max_value - min_value) / sample_count / 2\n    helper\[\"sample_radius_\"+channel].setValue(str(sample_radius))\n\n    sampleranges.append(max_value)\n    sampleranges.append(min_value)\n\n\n\n# def _generate_sample_list(sample_count, sample_range, sample_radius):\n    \"\"\"generate a list of sample values spread equally between the\n    min and max values of the sample range\"\"\"\n\n    sample_list = \[]\n\n    for item in range(0, sample_count):\n        sample_list.append(float(item) / sample_count * (max_value - min_value) + min_value + sample_radius)\n\n    helper\[\"samplelist_\"+channel].setValue(str(sample_list))\n    # return sample_list\nnuke.toNode(this.knob('name').value()).end()\nhelper\[\"sampleranges\"].setValue(str(sampleranges\[::-1]))\nhelper\[\"sampleit_button\"].setEnabled(True)" +STARTLINE}
+ addUserKnob {22 sampleit_button l "Step5 - Sample Grain" +DISABLED T "import base64\nhelper = nuke.thisNode()\nthis = helper.input(0)\n\n\n\ndef grain_run(this):\n    frame_list = list(helper\[\"framelist\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\n    r_samplelist = list(helper\[\"samplelist_red\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\n    b_samplelist = list(helper\[\"samplelist_blue\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\n    g_samplelist = list(helper\[\"samplelist_green\"].value().strip('\[]').replace('\"', '').replace(' ', '').split(','))\n    r_sradius = float(helper\[\"sample_radius_red\"].value())\n    g_sradius = float(helper\[\"sample_radius_green\"].value())\n    b_sradius = float(helper\[\"sample_radius_blue\"].value())\n\n\n    nuke.toNode(this.knob('name').value()).begin()\n\n    blank = base64.b64decode('cmVkIHtjdXJ2ZX0KZ3JlZW4ge2N1cnZlfQpibHVlIHtjdXJ2ZX0=').decode('ascii')\n    lut = nuke.toNode('Sampler1')\['lut']\n    lut.fromScript(blank)\n\n    keyer = nuke.toNode('Expression2')\n    curve_tool = nuke.toNode('CurveTool')\n    time_warp = nuke.toNode('TimeWarp1')\n    frame_blend = nuke.toNode('FrameBlend1')\n\n    time_warp\['disable'].setValue(False)\n    frame_blend\['disable'].setValue(False)\n    sample_list = \[r_samplelist,g_samplelist,b_samplelist]\n    sampleradius_list = \[r_sradius,g_sradius,b_sradius]\n    channel_list = \['red', 'green', 'blue']\n    copy = nuke.toNode('Copy2')\n    pixel = curve_tool\['ROI'].value()\[2] * curve_tool\['ROI'].value()\[3]\n    task = nuke.ProgressTask('Analysing...')\n    step = 100.0 / 3 / sample_count\n    progress = step\n            \n\n    for nn in range(0,len(sample_list)):\n        copy\['from0'].setValue('rgba.\{\}'.format(channel_list\[nn]))\n        for sample in sample_list\[nn]:\n            \n            if task.isCancelled():\n               return\n           \n            task.setProgress(int(progress))\n            keyer\['temp_expr0'].setValue(str(float(sample) - sampleradius_list\[nn]))\n            keyer\['temp_expr1'].setValue(str(float(sample) + sampleradius_list\[nn]))\n\n            intensity_knob = curve_tool\['intensitydata']\n            intensity_knob.clearAnimated()\n            intensity_knob.setAnimated()\n\n            nuke.execute(curve_tool, nuke.frame(), nuke.frame())\n            sample_values = intensity_knob.value()\n            intensity_knob.clearAnimated()    \n            task.setMessage('\{\} channel at \{\}'.format(channel_list\[nn], round(float(sample), 2)))\n            if sample_values\[3] * pixel >= 10:\n                lut.setValueAt(sample_values\[0] / sample_values\[3], sample_values\[1] / sample_values\[3], nn)\n            progress += step\n    time_warp\['disable'].setValue(True)  # hopefully prevents slowing down the comp\n    frame_blend\['disable'].setValue(True)  # hopefully prevents slowing down the comp   \n\n    nuke.toNode(this.knob('name').value()).end()\n    try:\n        del task\n    except Exception:\n        pass\ngrain_run(this)" +STARTLINE}
+ addUserKnob {26 ""}
+ addUserKnob {1 checkinput}
+ addUserKnob {1 framelist t "sample framelist"}
+ addUserKnob {1 setupmultiframe}
+ addUserKnob {1 sampleranges}
+ addUserKnob {26 ""}
+ addUserKnob {1 samplelist_red}
+ addUserKnob {26 ""}
+ addUserKnob {1 samplelist_green}
+ addUserKnob {26 ""}
+ addUserKnob {1 samplelist_blue}
+ addUserKnob {26 ""}
+ addUserKnob {1 sample_radius_red}
+ addUserKnob {1 sample_radius_green}
+ addUserKnob {1 sample_radius_blue}
+ addUserKnob {26 dasgrain_indie_nc l "" +STARTLINE T "\nDasgrain for Nuke Indie or Non Commercial adaptation by Magno Borgo"}
+}
+ Input {
+  inputs 0
+  name DasGrain
+  xpos -47
+ }
+ Output {
+  name Output1
+  xpos -47
+  ypos 161
+ }
+ Input {
+  inputs 0
+  name VoronoiMap
+  xpos 81
+  ypos -1
+  number 1
+ }
+push 0
+ Group {
+  inputs 2
+  name VoronoiScatterINC
+  xpos 81
+  ypos 161
+  disable {{!parent.scatter}}
+  addUserKnob {20 User}
+  addUserKnob {15 box}
+  box {{parent.box x1004 0 x1036 -75} {parent.box x1004 100 x1036 120} {parent.box x1004 496 x1036 325} {parent.box x1004 916 x1036 320}}
+  addUserKnob {3 sample_frame l "sample frame"}
+  sample_frame {{parent.sample_frame}}
+  addUserKnob {7 cell_size l "cell size" R 0 100}
+  cell_size {{parent.cell_size}}
+  addUserKnob {6 overlay_pattern l "overlay pattern" -STARTLINE}
+  overlay_pattern {{parent.overlay}}
+  addUserKnob {3 edge_blend_size l "edge blend size"}
+  edge_blend_size {{parent.edge_blend_size}}
+  addUserKnob {7 amplitude R 0 100}
+  amplitude {{parent.amplitude}}
+  addUserKnob {7 frequency R 0 100}
+  frequency {{parent.frequency}}
+ }
+  Input {
+   inputs 0
+   name Input1
+   xpos 180
+   ypos -862
+  }
+  Transform {
+   translate {{"\[value parent.voronoi_offset.x]" x21 104} {"\[value parent.voronoi_offset.y]" x21 60}}
+   name Transform_voronoi
+   xpos 180
+   ypos -790
+   disable {{"!\[value parent.voronoi_map_enable]"}}
+  }
+  Dot {
+   name Dot14
+   xpos 214
+   ypos -749
+  }
+set N392d9400 [stack 0]
+  Dot {
+   name Dot16
+   xpos 434
+   ypos -749
+  }
+  Remove {
+   name Remove1
+   xpos 400
+   ypos -684
+  }
+  Dot {
+   name Dot6
+   xpos 434
+   ypos -605
+  }
+set N392d8800 [stack 0]
+  Dot {
+   name Dot15
+   xpos 654
+   ypos -605
+  }
+  Dot {
+   name Dot7
+   xpos 874
+   ypos -605
+  }
+  Noise {
+   output {rgba.red -rgba.green -rgba.blue none}
+   replace true
+   size {{parent.frequency} {"parent.frequency * pixel_aspect"}}
+   zoffset {{"x + 1000"}}
+   gamma 1
+   name Noise1
+   xpos 840
+   ypos -513
+  }
+  Noise {
+   output {-rgba.red rgba.green -rgba.blue none}
+   replace true
+   size {{parent.Noise1.size} {parent.Noise1.size}}
+   zoffset {{x}}
+   gamma 1
+   name Noise2
+   xpos 840
+   ypos -465
+  }
+  Clamp {
+   name Clamp1
+   xpos 840
+   ypos -424
+  }
+  Dot {
+   name Dot11
+   xpos 874
+   ypos -366
+  }
+  Input {
+   inputs 0
+   name voronoi_input
+   xpos 620
+   ypos -513
+   number 1
+  }
+  Copy {
+   inputs 2
+   from0 rgba.red
+   to0 forward.u
+   from1 rgba.green
+   to1 forward.v
+   name Copy1
+   xpos 620
+   ypos -382
+   disable {{"parent.amplitude == 0"}}
+  }
+  IDistort {
+   uv forward
+   uv_offset 0.5
+   uv_scale {{parent.amplitude} {"uv_scale.w * pixel_aspect"}}
+   filter impulse
+   name IDistort1
+   xpos 620
+   ypos -280
+   disable {{"parent.amplitude == 0"}}
+  }
+  Dot {
+   name Dot5
+   xpos 654
+   ypos -246
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur3
+   xpos 620
+   ypos -154
+  }
+  Transform {
+   translate {{"floor((x * size) % 1 * (size)) - int(size / 2)"} {"floor(x % 1 * (size)) - int(size/2)"}}
+   filter impulse
+   black_outside false
+   name Transform1
+   xpos 620
+   ypos -58
+   disable {{"parent.edge_blend_size < 1"}}
+   addUserKnob {20 User}
+   addUserKnob {3 size}
+   size {{"parent.edge_blend_size + 1"}}
+  }
+  Dot {
+   name Dot9
+   xpos 654
+   ypos 42
+  }
+set N9a9f9000 [stack 0]
+push $N392d8800
+  Expression {
+   expr0 "(x + .5) / width"
+   expr1 "(y + .5) / height"
+   expr2 0
+   name STMapGenerator
+   xpos 400
+   ypos -515
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur2
+   xpos 400
+   ypos -154
+  }
+  Merge2 {
+   inputs 2
+   operation from
+   Achannels {rgba.red rgba.green -rgba.blue none}
+   Bchannels {rgba.red rgba.green -rgba.blue none}
+   output {rgba.red rgba.green -rgba.blue none}
+   name Merge2
+   xpos 400
+   ypos 38
+  }
+  Dot {
+   name Dot10
+   xpos 434
+   ypos 210
+  }
+push $N9a9f9000
+  Expression {
+   temp_name0 view_index
+   temp_expr0 "parent.parent.stereo == 1 ? \[lsearch \[value root.views] \[view]] / 2 : 0"
+   expr0 "random((r + view_index) * 1000000, 0) * (maxx - minx) + minx"
+   expr1 "random((g + view_index) * 1000000, 0) * (maxy - miny) + miny"
+   channel2 none
+   channel3 none
+   name Expression3
+   xpos 620
+   ypos 110
+   addUserKnob {20 User}
+   addUserKnob {7 frequency R 0 100}
+   frequency {{parent.parent.cell_size}}
+   addUserKnob {7 multiplier R 0 3}
+   multiplier 0.5
+   addUserKnob {15 shrink}
+   shrink {{"frequency * multiplier + ceil(parent.edge_blend_size / 2) + IDistort1.uv_scale.w / 2"} {"frequency * multiplier + ceil(parent.edge_blend_size / 2) + IDistort1.uv_scale.h / 2"} {"frequency * multiplier + floor(parent.edge_blend_size / 2) + IDistort1.uv_scale.w / 2"} {"frequency * multiplier + floor(parent.edge_blend_size / 2) + IDistort1.uv_scale.h / 2"}}
+   addUserKnob {26 ""}
+   addUserKnob {7 minx}
+   minx {{"(parent.box.x + shrink.x + .5) / width"}}
+   addUserKnob {7 maxx}
+   maxx {{"(parent.box.r - shrink.r - .5) / width"}}
+   addUserKnob {7 miny}
+   miny {{"(parent.box.y + shrink.y + .5) / height"}}
+   addUserKnob {7 maxy}
+   maxy {{"(parent.box.t - shrink.t - .5) / height"}}
+  }
+  Merge2 {
+   inputs 2
+   operation plus
+   Achannels {rgba.red rgba.green -rgba.blue none}
+   Bchannels {rgba.red rgba.green -rgba.blue none}
+   output {rgba.red rgba.green -rgba.blue none}
+   name Merge3
+   xpos 620
+   ypos 206
+  }
+  Expression {
+   expr0 "(r + (maxx - minx) - minx) % (maxx - minx) + minx"
+   expr1 "(g + (maxy - miny) - miny) % (maxy - miny) + miny"
+   channel2 none
+   channel3 none
+   name Expression7
+   xpos 620
+   ypos 280
+   addUserKnob {20 User}
+   addUserKnob {7 minx}
+   minx {{"(parent.box.x + rint(x % 1 * parent.edge_blend_size) + .5) / width"}}
+   addUserKnob {7 maxx}
+   maxx {{"(parent.box.r + rint(x % 1 * parent.edge_blend_size) - .5) / width"}}
+   addUserKnob {7 miny}
+   miny {{"(parent.box.y + rint(x % 1 * parent.edge_blend_size) + .5) / height"}}
+   addUserKnob {7 maxy}
+   maxy {{"(parent.box.t + rint(x % 1 * parent.edge_blend_size) - .5) / height"}}
+  }
+  Dot {
+   name Dot3
+   xpos 654
+   ypos 354
+  }
+set N9a99ac00 [stack 0]
+  Dot {
+   name Dot13
+   xpos 654
+   ypos 546
+  }
+push $N9a99ac00
+  Dot {
+   name Dot8
+   xpos 874
+   ypos 354
+  }
+  Blur {
+   channels rgb
+   size {{pixel_aspect} 1}
+   name Blur1
+   label "\[value size]"
+   xpos 840
+   ypos 440
+  }
+  Difference {
+   inputs 2
+   name Difference2
+   xpos 840
+   ypos 536
+  }
+  Expression {
+   channel0 {none none none rgba.alpha}
+   expr0 "a > 1e-9"
+   channel1 none
+   channel2 none
+   channel3 none
+   name Expression2
+   xpos 840
+   ypos 614
+  }
+  Shuffle {
+   red alpha
+   green alpha
+   blue alpha
+   name Shuffle1
+   label "\[value in]:\[value out]"
+   xpos 840
+   ypos 680
+  }
+  Dot {
+   name Dot4
+   xpos 874
+   ypos 762
+  }
+push $N9a99ac00
+push $N392d9400
+  FrameHold {
+   first_frame {{parent.sample_frame}}
+   name FrameHold1
+   xpos 180
+   ypos -256
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur1
+   xpos 180
+   ypos -154
+  }
+  STMap {
+   inputs 2
+   channels rgb
+   uv rgb
+   filter impulse
+   name STMap1
+   xpos 180
+   ypos 351
+  }
+set N9a998800 [stack 0]
+  TimeBlur {
+   divisions {{"max(Transform1.size == 1 ? 2 : pow2(Transform1.size), 1)"}}
+   shutter 1
+   shuttercustomoffset {{"1 / divisions / 2"}}
+   name TimeBlur1
+   xpos 180
+   ypos 446
+   disable {{"parent.edge_blend_size < 1"}}
+  }
+set N9a998400 [stack 0]
+push $N9a998800
+  Dot {
+   name Dot1
+   xpos -6
+   ypos 354
+  }
+  Difference {
+   inputs 2
+   name Difference1
+   xpos -40
+   ypos 440
+  }
+  Expression {
+   channel0 {none none none rgba.alpha}
+   expr0 "a > 1e-10"
+   channel1 none
+   channel2 none
+   channel3 none
+   name Expression1
+   xpos -40
+   ypos 494
+  }
+  Blur {
+   channels alpha
+   size {{parent.parent.edge_blend_size}}
+   name Blur2
+   xpos -40
+   ypos 536
+  }
+  Grade {
+   channels alpha
+   blackpoint 0.5
+   white_clamp true
+   name Grade2
+   xpos -40
+   ypos 584
+  }
+  Dot {
+   name Dot2
+   xpos -6
+   ypos 666
+  }
+push $N9a998400
+  Grade {
+   inputs 1+1
+   white 1.4
+   black_clamp false
+   name Grade1
+   xpos 180
+   ypos 662
+   disable {{"parent.edge_blend_size < 1"}}
+  }
+  Merge2 {
+   inputs 2
+   Achannels rgb
+   Bchannels rgb
+   output rgb
+   name Merge1
+   xpos 180
+   ypos 758
+   disable {{!parent.overlay_pattern}}
+  }
+  Assert {
+   expression {{"Expression3.maxx > Expression3.minx && Expression3.maxy > Expression3.miny"}}
+   message "increase sample box size or decrease cell size"
+   name error
+   xpos 180
+   ypos 854
+  }
+  Output {
+   name Output1
+   xpos 180
+   ypos 950
+  }
+push $N9a998800
+push 0
+  Viewer {
+   inputs 2
+   frame_range 1-41
+   name Viewer1
+   xpos 730
+   ypos 280
+  }
+ end_group
+end_group

@@ -12,9 +12,8 @@ Tested to work with DasGrain 1.8
 Just drop the files on your .nuke Toolset folder. I've included a sample Voronoi map and the Voronoi map generator (regular Nuke only).
 
 Voronoi map alternatives:
-http://www.raymondhill.net/voronoi/rhill-voronoi.html (check the "colorize" option)<br>
-Alexandre Gaudiano get the credits for finding this tool.
-
+http://www.raymondhill.net/voronoi/rhill-voronoi.html (check the "colourize" option)<br>
+<a hef="https://youtu.be/6LHP_PrG884?t=794" target="_blank"> Alexandre Gaudiano get the credits for finding this tool. </a>
 
 ## Thanks
 

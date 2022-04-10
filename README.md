@@ -13,7 +13,7 @@ Just drop the files on your .nuke Toolset folder. I've included a sample Voronoi
 
 Voronoi map alternatives:
 http://www.raymondhill.net/voronoi/rhill-voronoi.html (check the "colourize" option)<br>
-<a hef="https://youtu.be/6LHP_PrG884?t=794" target="_blank"> Alexandre Gaudiano get the credits for finding this tool. </a>
+https://youtu.be/6LHP_PrG884?t=794 Alexandre Gaudiano get the credits for finding this tool. 
 
 ## Thanks
 

@@ -9,7 +9,7 @@ Tested to work with DasGrain 1.8
 
 ## Instalation
 
-Just drop the files on your .nuke Toolset folder. I've included a sample Voronoi map and the Voronoi map generator (regular Nuke only).
+Just drop the files on your .nuke Toolset folder. I've included a sample Voronoi map and the Voronoi map generator (regular Nuke only).<br>
 ** YOU NEED A SEQUENCE OF ANIMATED VORONOI MAPS ** otherwise your resampled grain will be static.
 
 

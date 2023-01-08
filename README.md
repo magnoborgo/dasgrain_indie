@@ -16,11 +16,8 @@ I've included a sample Voronoi map and the Voronoi map generator (regular Nuke o
 
 NEW (Jan 2023): Naive Voronoi Toolset added, just plug it into the Voronoi Map input (or prerender a sequence from it)
 Its a bruteforce approach using only Nuke expression nodes, somewhat slow but works!
+also added the "voronoi_naive_generator.nk" that can be used to create new Voronois toolsets.
 
-
-Voronoi map alternatives:
-http://www.raymondhill.net/voronoi/rhill-voronoi.html (check the "colourize" option)<br>
-https://youtu.be/6LHP_PrG884?t=794 Alexandre Gaudiano get the credits for finding this tool. 
 
 ## Thanks
 

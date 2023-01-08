@@ -1,0 +1,328 @@
+set cut_paste_input [stack 0]
+version 12.2 v11
+push $cut_paste_input
+Group {
+ name voronoi_naive
+ selected true
+ xpos -1252
+ ypos -118
+ cached true
+ addUserKnob {20 Voronoi}
+ addUserKnob {7 slices l "Rows/Columns divisions" t "Determine the number of grid rows/columns to generate de random points of the Voronoi.\nValues above 20 things can get really slow" R 2 100}
+ slices 2
+ addUserKnob {6 accurate l Accurate t "When check you get perfect voronois but its slower. When uncheck you can get some errors, but is way faster.\n" +STARTLINE}
+ addUserKnob {22 vsize l "Change Size!" t "Use this button to change the Row/Columns divisions" T "import nuke\nimport random\n\nthis = nuke.thisNode()\n\n\nif this\['slices'].value() < 2:\n    this\['slices'].setValue(2)\n\n\n   \nslices = int(this\['slices'].value())\n\n# cleanup\nnode = nuke.toNode(\"Input1\")\noutput = nuke.toNode(\"Output1\")\n\nfor n in this.nodes():\n    if n not in \[node,output]:\n        nuke.delete(n)\n\nseedx = int(this\['seed'].x())\nseedy = int(this\['seed'].y())\n\n# (random(1,frame*1)*1)+0   (random(seed,frame*frequency)*amplitude)+valueOffset\n\n\ne_list = \[]\nsections = 1.0/slices\n\nfor n in range(slices):\n    offsetx = sections*n \n    for m in range(slices):\n        exp = nuke.createNode(\"Expression\",inpanel = False)\n        exp.setInput(0, node)\n        offsety = sections*m \n        #divide image into equal sections and add a random point on each section\n        exp\[\"temp_name0\"].setValue(\"rp_x\")\n        exp\[\"temp_expr0\"].setValue(\"(random(%s+%s,frame*1)*(%s/%s))+((%s+%s)*uvx_end)\" % (int(seedx*random.random()),\"seed.x\",\"uvx_end\",slices,offsetx,\"uvx_start\"))\n        exp\[\"temp_name1\"].setValue(\"rp_y\")\n        exp\[\"temp_expr1\"].setValue(\"(random(%s+%s,frame*1)*(%s/%s))+((%s+%s)*uvy_end)\" % (int(seedy*random.random()),\"seed.y\",\"uvy_end\",slices,offsety,\"uvy_start\"))\n        \n#        exp\[\"temp_expr1\"].setValue(\"(random(%s+%s,frame*1)*%s)+%s\" % (int(seedy*random.random()),\"seed.y\",sections,offsety))\n        exp\[\"temp_name2\"].setValue(\"int_x\")\n        exp\[\"temp_name3\"].setValue(\"int_y\")\n        exp\[\"temp_expr2\"].setValue(\"ceil(rp_x*width)\")\n        exp\[\"temp_expr3\"].setValue(\"ceil(rp_y*height)\")\n        \n        exp\[\"expr1\"].setValue(\"int_x\")\n        exp\[\"expr2\"].setValue(\"int_y\")\n        exp\[\"expr1\"].setValue(\"rp_x\")\n        exp\[\"expr2\"].setValue(\"rp_y\")\n        exp\[\"expr0\"].setValue(\"sqrt((x - int_x)**2 + (y - int_y)**2)\")\n        e_list.append(\[exp,n,m])\n       \ncount = 0   \nme_list = \[]\n\n# ea\n\nfor enode in e_list:\n    temp_e_list = list(e_list) #create a copy\n    temp_e_list.pop(count)\n    #print(count,temp_e_list)\n\n    #each cell should interact with a maximum of 8 neighboorhood cells\n    print(enode,\"evaluating enode\")\n    first_connection = True\n    for cnode in temp_e_list: #connecting nodes\n        #print(\"base\",cnode,range(enode\[1]-1,enode\[1]+2))\n        if cnode\[1] in range(enode\[1]-2,enode\[1]+3) and cnode\[2] in range(enode\[2]-2,enode\[2]+3):\n            print(cnode,range(enode\[1]-1,enode\[1]+2))\n            me = nuke.createNode(\"MergeExpression\",inpanel = False)\n            me\[\"expr0\"].setValue(\"Ar < Br ? Ar: nan\")\n            me\[\"expr1\"].setValue(\"Ar < Br ? Ag : nan\")\n            me\[\"expr2\"].setValue(\"Ar < Br ? Ab : nan\")\n            me\[\"channel3\"].setValue(\"alpha\")\n            me\[\"expr3\"].setValue(\"Ar < Br ? %s.%s : nan\" %(enode\[1],enode\[2])) # fake alpha to check the index of the col/row\n\n            if first_connection:\n                me.setInput(1, enode\[0])\n                first_connection = False\n            me.setInput(0, cnode\[0])\n\n        \n\n    me_list.append(me)\n\n    count+=1\n\n\nexpr_list = \[]\n\n\nfor me_node in me_list:\n   exp = nuke.createNode(\"Expression\",inpanel = False)\n   exp.setInput(0, me_node)\n   exp\[\"expr0\"].setValue(\"isnan(r) ? 0 : g\")\n   exp\[\"expr1\"].setValue(\"isnan(r) ? 0 : b\")\n   exp\[\"expr2\"].setValue(\"0\")\n   me\[\"channel3\"].setValue(\"alpha\")\n   exp\[\"expr3\"].setValue(\"isnan(r) ? 0 : a\")\n   expr_list.append(exp)\n\nfor ex in range(len(expr_list)-1):\n   p= nuke.createNode(\"Merge2\",inpanel=False)\n   p\[\"operation\"].setValue(\"under\")\n   if ex == 0:\n       p.setInput(0, expr_list\[ex])\n       p.setInput(1, expr_list\[ex+1])\n   else:\n       p.setInput(0, expr_list\[ex+1])\n\n#fix some black pixels\nb_exp = nuke.createNode(\"Expression\",inpanel = False)\nb_exp\[\"expr0\"].setValue(\"r == 0 ? r(x+1, y) : r\")\nb_exp\[\"expr1\"].setValue(\"g == 0 ? g(x+1, y) : g\")\nb_exp.setInput(0, p)\n\n#black outside for uv\nbo_exp = nuke.createNode(\"Expression\",inpanel = False)\nbo_exp\[\"expr0\"].setValue(\"x < (width*uvx_start) || x > (width*uvx_end) || y < (height*uvy_start) ||  y > (height*uvy_end)? 0 : r\")\nbo_exp\[\"expr1\"].setValue(\"x < (width*uvx_start) || x > (width*uvx_end) || y < (height*uvy_start) ||  y > (height*uvy_end)? 0 : g\")\nbo_exp.setInput(0, b_exp)\n\n\noutput.setInput(0, bo_exp)" +STARTLINE}
+ addUserKnob {26 "" +STARTLINE}
+ addUserKnob {12 seed l Seed}
+ seed {1234 5678}
+ addUserKnob {26 "" +STARTLINE}
+ addUserKnob {26 _2 l "" +STARTLINE T "Naive Voronoi implementation\nusing only Nuke expression nodes\nBy Magno Borgo - Jan 2023"}
+ addUserKnob {20 UV}
+ addUserKnob {7 uvx_start l "UV X start"}
+ addUserKnob {7 uvx_end l "UV X end "}
+ uvx_end 1
+ addUserKnob {7 uvy_start l "UV Y start"}
+ addUserKnob {7 uvy_end l "UV Y end "}
+ uvy_end 1
+ addUserKnob {26 ""}
+ addUserKnob {26 uvs l "" -STARTLINE T "this UV tab is a work in progress."}
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos 2142
+  ypos 530
+ }
+set N73a30c00 [stack 0]
+ Expression {
+  temp_name0 rp_x
+  temp_expr0 (random(1026+seed.x,frame*1)*(uvx_end/2))+((0.0+uvx_start)*uvx_end)
+  temp_name1 rp_y
+  temp_expr1 (random(2929+seed.y,frame*1)*(uvy_end/2))+((0.5+uvy_start)*uvy_end)
+  temp_name2 int_x
+  temp_expr2 ceil(rp_x*width)
+  temp_name3 int_y
+  temp_expr3 ceil(rp_y*height)
+  expr0 "sqrt((x - int_x)**2 + (y - int_y)**2)"
+  expr1 rp_x
+  expr2 rp_y
+  name Expression2
+  xpos 2252
+  ypos 602
+ }
+set N2f0c040 [stack 0]
+push $N73a30c00
+ Expression {
+  temp_name0 rp_x
+  temp_expr0 (random(564+seed.x,frame*1)*(uvx_end/2))+((0.0+uvx_start)*uvx_end)
+  temp_name1 rp_y
+  temp_expr1 (random(4117+seed.y,frame*1)*(uvy_end/2))+((0.0+uvy_start)*uvy_end)
+  temp_name2 int_x
+  temp_expr2 ceil(rp_x*width)
+  temp_name3 int_y
+  temp_expr3 ceil(rp_y*height)
+  expr0 "sqrt((x - int_x)**2 + (y - int_y)**2)"
+  expr1 rp_x
+  expr2 rp_y
+  name Expression1
+  xpos 2142
+  ypos 62
+ }
+set N2f04080 [stack 0]
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.1 : nan"
+  name MergeExpression4
+  xpos 2692
+  ypos 626
+ }
+push $N73a30c00
+ Expression {
+  temp_name0 rp_x
+  temp_expr0 (random(589+seed.x,frame*1)*(uvx_end/2))+((0.5+uvx_start)*uvx_end)
+  temp_name1 rp_y
+  temp_expr1 (random(1860+seed.y,frame*1)*(uvy_end/2))+((0.0+uvy_start)*uvy_end)
+  temp_name2 int_x
+  temp_expr2 ceil(rp_x*width)
+  temp_name3 int_y
+  temp_expr3 ceil(rp_y*height)
+  expr0 "sqrt((x - int_x)**2 + (y - int_y)**2)"
+  expr1 rp_x
+  expr2 rp_y
+  name Expression3
+  xpos 2142
+  ypos 626
+ }
+set N2f13910 [stack 0]
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.1 : nan"
+  name MergeExpression5
+  xpos 2692
+  ypos 650
+ }
+push $N73a30c00
+ Expression {
+  temp_name0 rp_x
+  temp_expr0 (random(31+seed.x,frame*1)*(uvx_end/2))+((0.5+uvx_start)*uvx_end)
+  temp_name1 rp_y
+  temp_expr1 (random(5431+seed.y,frame*1)*(uvy_end/2))+((0.5+uvy_start)*uvy_end)
+  temp_name2 int_x
+  temp_expr2 ceil(rp_x*width)
+  temp_name3 int_y
+  temp_expr3 ceil(rp_y*height)
+  expr0 "sqrt((x - int_x)**2 + (y - int_y)**2)"
+  expr1 rp_x
+  expr2 rp_y
+  name Expression4
+  xpos 2362
+  ypos 554
+ }
+set N2f1af40 [stack 0]
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.1 : nan"
+  name MergeExpression6
+  xpos 2692
+  ypos 674
+ }
+ Expression {
+  expr0 "isnan(r) ? 0 : g"
+  expr1 "isnan(r) ? 0 : b"
+  expr2 0
+  expr3 "isnan(r) ? 0 : a"
+  name Expression6
+  xpos 2692
+  ypos 698
+ }
+push $N2f04080
+push $N2f0c040
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.0 : nan"
+  name MergeExpression1
+  xpos 2582
+  ypos 626
+ }
+push $N2f13910
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.0 : nan"
+  name MergeExpression2
+  xpos 2582
+  ypos 650
+ }
+push $N2f1af40
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 0.0 : nan"
+  name MergeExpression3
+  xpos 2582
+  ypos 674
+ }
+ Expression {
+  expr0 "isnan(r) ? 0 : g"
+  expr1 "isnan(r) ? 0 : b"
+  expr2 0
+  expr3 "isnan(r) ? 0 : a"
+  name Expression5
+  xpos 2582
+  ypos 722
+ }
+ Merge2 {
+  inputs 2
+  operation under
+  name Merge1
+  xpos 2692
+  ypos 722
+ }
+push $N2f13910
+push $N2f04080
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.0 : nan"
+  name MergeExpression7
+  xpos 2252
+  ypos 626
+ }
+push $N2f0c040
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.0 : nan"
+  name MergeExpression8
+  xpos 2472
+  ypos 626
+ }
+push $N2f1af40
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.0 : nan"
+  name MergeExpression9
+  xpos 2472
+  ypos 650
+ }
+ Expression {
+  expr0 "isnan(r) ? 0 : g"
+  expr1 "isnan(r) ? 0 : b"
+  expr2 0
+  expr3 "isnan(r) ? 0 : a"
+  name Expression7
+  xpos 2472
+  ypos 746
+ }
+ Merge2 {
+  inputs 2
+  operation under
+  name Merge2
+  xpos 2692
+  ypos 746
+ }
+push $N2f1af40
+push $N2f04080
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.1 : nan"
+  name MergeExpression10
+  xpos 2362
+  ypos 578
+ }
+push $N2f0c040
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.1 : nan"
+  name MergeExpression11
+  xpos 2362
+  ypos 602
+ }
+push $N2f13910
+ MergeExpression {
+  inputs 2
+  expr0 "Ar < Br ? Ar: nan"
+  expr1 "Ar < Br ? Ag : nan"
+  expr2 "Ar < Br ? Ab : nan"
+  channel3 alpha
+  expr3 "Ar < Br ? 1.1 : nan"
+  name MergeExpression12
+  xpos 2362
+  ypos 626
+ }
+ Expression {
+  expr0 "isnan(r) ? 0 : g"
+  expr1 "isnan(r) ? 0 : b"
+  expr2 0
+  expr3 "isnan(r) ? 0 : a"
+  name Expression8
+  xpos 2362
+  ypos 770
+ }
+ Merge2 {
+  inputs 2
+  operation under
+  name Merge3
+  xpos 2692
+  ypos 770
+ }
+ Expression {
+  expr0 "r == 0 ? r(x+1, y) : r"
+  expr1 "g == 0 ? g(x+1, y) : g"
+  name Expression9
+  xpos 2692
+  ypos 794
+ }
+ Expression {
+  expr0 "x < (width*uvx_start) || x > (width*uvx_end) || y < (height*uvy_start) ||  y > (height*uvy_end)? 0 : r"
+  expr1 "x < (width*uvx_start) || x > (width*uvx_end) || y < (height*uvy_start) ||  y > (height*uvy_end)? 0 : g"
+  name Expression10
+  xpos 2692
+  ypos 818
+ }
+ Output {
+  name Output1
+  xpos 2731
+  ypos 1293
+ }
+end_group

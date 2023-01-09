@@ -10,9 +10,12 @@ Tested to work with DasGrain 1.8
 ## Instalation
 
 Just drop the files on your .nuke Toolset folder.
+
+VORONOI scatter:
+If you are on Nuke Indie - you dont need to run "step 1B" you can use the original dasgrain voronoi scatter.
+
 I've included a sample Voronoi map and the Voronoi map generator (regular Nuke only).<br>
 ** YOU NEED A SEQUENCE OF ANIMATED VORONOI MAPS ** otherwise your resampled grain will be static.
-
 
 NEW (Jan 2023): Naive Voronoi Toolset added, just plug it into the Voronoi Map input (or prerender a sequence from it)
 Its a bruteforce approach using only Nuke expression nodes, somewhat slow but works!
